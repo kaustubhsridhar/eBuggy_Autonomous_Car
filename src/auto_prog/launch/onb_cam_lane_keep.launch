@@ -1,0 +1,105 @@
+<launch>
+  <!-- Copied from jetson_csi_cam.launch in jetson_csi_cam ROS package -->
+  <arg name="cam_name" default="csi_cam" />                  <!-- The name of the camera (corrsponding to the camera info) -->
+  <arg name="frame_id" default="/$(arg cam_name)_link" />    <!-- The TF frame ID. -->
+  <arg name="sync_sink" default="true" />                    <!-- Synchronize the app sink. Setting this to false may resolve problems with sub-par framerates. -->
+  <arg name="width" default="640" />                        <!-- Image Width -->
+  <arg name="height" default="480" />                       <!-- Image Height -->
+  <arg name="fps" default="20" />                            <!-- Desired framerate. True framerate may not reach this if set too high. -->
+
+  <!-- Make arguments available to parameter server -->
+  <param name="$(arg cam_name)/image_width" type="int" value="640" />
+  <param name="$(arg cam_name)/image_height" type="int" value="480" />
+  <param name="$(arg cam_name)/target_fps" type="int" value="20" />
+
+  <!-- Define the GSCAM pipeline -->
+  <env name="GSCAM_CONFIG" value="nvcamerasrc ! video/x-raw(memory:NVMM),
+    width=(int)$(arg width), height=(int)$(arg height), format=(string)I420, framerate=(fraction)$(arg fps)/1 ! 
+    nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR" />
+
+  <!-- Start the GSCAM node -->
+  <node pkg="gscam" type="gscam" name="$(arg cam_name)">
+    <param name="camera_name" value="$(arg cam_name)" />
+    <param name="frame_id" value="$(arg frame_id)" />
+    <param name="sync_sink" value="$(arg sync_sink)" />
+    <remap from="camera/image_raw" to="$(arg cam_name)/image_raw" />
+    <remap from="/set_camera_info" to="$(arg cam_name)/set_camera_info" />
+  </node>
+
+  <!-- My nodes to make eBuggy line-follow -->
+  <!-- <node name="onboard_cam_lane_keeping_node" pkg="cam_data" type="onboard_cam_lane_keeping_node.py"></node> -->
+  <node name="reciever_node" pkg="reciever" type="reciever_node"></node>
+  <node name="auto_prog_node4cam" pkg="auto_prog" type="auto_prog_node4cam"></node>
+  <node name="controller_pub_node" pkg="controller" type="controller_pub_node"></node>
+  <node name="controller_sub_node" pkg="controller" type="controller_sub_node"></node>
+
+  <!-- comment below if you dont want to see raw image-->
+  <!-- <node name="image_view" pkg="image_view" type="image_view" respawn="false" output="screen">
+    <remap from="image" to="/csi_cam/image_raw"/>
+    <param name="autosize" value="true" />
+  </node> -->
+
+
+
+  <!-- Copy of src/fu_Line_detection/launch/line_detection_fu.launch below -->
+<!-- min and max vals for these params in file in folder fu_line_detection/cfg --> 
+<!-- explanation of all these params also in file in folder fu_line_detection/cfg --> 
+
+  <node name="line_detection_fu_node" pkg="line_detection_fu" type="line_detection_fu_node" > 
+    <param name="cam_w"                         type="int"    value="640"/>  
+    <param name="cam_h"                         type="int"    value="480"/> 
+	<param name="proj_y_start"            	    type="int"	  value="0"/>
+  	<param name="proj_image_h"            	    type="int" 	  value="120"/>
+  	<param name="proj_image_w"            	    type="int" 	  value="160"/>
+  	<param name="proj_image_horizontal_offset"  type="int"    value="4"/> <!-- change all proj_image_... stuff to change proj image size which is unnecessary. Just change ROI (green box)--> 
+    <param name="roi_top_w"            	        type="int" 	  value="160"/>
+  	<param name="roi_bottom_w"            	    type="int" 	  value="160"/> 
+    <param name="maxYRoi"                       type="int"    value="70"/>
+    <param name="minYDefaultRoi"                type="int"    value="0"/> <!-- change all ROI stuff to make green box larger-->
+    <param name="minYPolyRoi"                   type="int"    value="0"/>
+    <param name="defaultXLeft"                  type="int"    value="0"/>
+    <param name="defaultXCenter"                type="int"    value="26"/>
+    <param name="defaultXRight"                 type="int"    value="110"/> <!-- change all defaultX... stuff to move BGR lines... within 2 BGR lines, one lane should fit--> 
+    <param name="interestDistancePoly"          type="int"    value="5"/> <!-- interestDistancePoly - to previous poly -->
+    <param name="interestDistanceDefault"       type="int"    value="20"/> <!-- interestDistanceDefault - to default lines -->
+    <param name="iterationsRansac"              type="int"    value="30"/>
+    <param name="proportionThreshould"          type="double" value="0.6"/> <!--supporter proportionThreshould -->
+    <param name="m_gradientThreshold"           type="int"    value="8"/> <!-- keep low but not too low -->
+    <param name="m_nonMaxWidth"                 type="int"    value="10"/>
+    <param name="laneMarkingSquaredThreshold"   type="int"    value="36"/> <!-- changes what edges are recognised as beng part of lane markers -->
+    <param name="angleAdjacentLeg"              type="int"    value="100"/> <!-- keep close to minYRoi (in front of car)? The white line in lane poly window shows pt where angle calculated  -->
+    <param name="scanlinesVerticalDistance"     type="int"    value="2"/>
+    <param name="scanlinesMaxCount"             type="int"    value="100"/>
+    <param name="polyY1"                        type="int"    value="75"/> <!-- this is Y of first point for generating lane poly -->
+    <param name="polyY2"                        type="int"    value="85"/> <!-- this is Y of second point for generating lane poly -->    
+    <param name="polyY3"                        type="int"    value="95"/>  <!-- this is Y of third point for generating lane poly -->   
+    <param name="detectLaneStartX"              type="int"    value="155"/> <!--this was originally 0.7m, which is about 90 in our case... used for gradient computation, might help us to get rid of too crazy polynomials--> <!-- orig val: 155 -->
+    <param name="maxAngleDiff"                  type="int"    value="999"/>
+
+    <param name="camera_name"     		type="string"   value="/csi_cam/image_raw"/>      
+    <param name="cam_deg"             	type="double"   value="0"/>
+    <param name="cam_height"           	type="double"   value="20"/>
+
+
+    <!-- jack 13 720p calibration: -->
+    <!--param name="f_u"             	type="double"   value="927.054138"/>
+    <param name="f_v"             		type="double"   value="935.428772"/>
+    <param name="c_u"             		type="double"   value="654.456376"/>
+    <param name="c_v"             		type="double"   value="346.241851"/-->
+    
+
+    <!-- jack 13 640*480 - cut to only bottom half (640*240) calibration: -->
+    <!-- param name="f_u"             		type="double"   value="655.554626"/>
+    <param name="f_v"             		type="double"   value="652.052734"/>
+    <param name="c_u"             		type="double"   value="312.773367"/>
+    <param name="c_v"             		type="double"   value="7.779505"/ -->
+
+    <!-- tx1: -->
+    <param name="f_u"             		type="double"   value="450"/>
+    <param name="f_v"             		type="double"   value="690"/>
+    <param name="c_u"             		type="double"   value="342"/>
+    <param name="c_v"             		type="double"   value="200"/>
+    
+  </node>
+
+</launch>

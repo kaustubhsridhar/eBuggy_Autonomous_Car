@@ -1,0 +1,65 @@
+#include "ros/ros.h"
+#include <std_msgs/String.h>
+#include <std_msgs/Empty.h>
+
+#include "auto_prog/Gen_Cmd.h"
+#include "cam_data/Yaw.h"
+#include "reciever/Cmd.h"
+
+#include <sstream>
+#include <string>
+
+#include <pthread.h> //for C++ multithreading
+
+// this is autonomous program that generates control commands and publishes to /command topic via auto_prog::Gen_Cmd message
+// currently subscribes to /rec_data and send same to /command
+// this will also subscribe to /cam_yaw in the future 
+
+using namespace std;
+
+string Convert (float number){
+    std::ostringstream buff;
+    buff<<number;
+    return buff.str(); 
+}
+
+
+class SubscribeAndPublish
+{
+public:
+  SubscribeAndPublish()
+  {
+    read_pub = nh.advertise<auto_prog::Gen_Cmd>("/command", 1000);
+    write_sub = nh.subscribe("/rec_data", 1000, rec_data_callback);
+  }
+
+  void rec_data_callback(const reciever::Cmd::ConstPtr& rec_msg) 
+  {
+    auto_prog::Gen_Cmd msg;
+    //.... do something with the input and generate the output...
+    ROS_INFO_STREAM("Reading from /rec_data");
+    msg.mode = rec_msg->mode;	
+    msg.servo = rec_msg->servo;
+    msg.vel = rec_msg->vel;
+    read_pub.publish(msg);
+  }
+
+private:
+  ros::NodeHandle nh; 
+  ros::Publisher read_pub;
+  ros::Subscriber write_sub;
+
+};//End of class SubscribeAndPublish
+
+int main(int argc, char **argv)
+{
+  //Initiate ROS
+  ros::init(argc, argv, "subscribe_and_publish");
+
+  //Create an object of class SubscribeAndPublish that will take care of everything
+  SubscribeAndPublish SAPObject;
+
+  ros::spin();
+
+  return 0;
+}

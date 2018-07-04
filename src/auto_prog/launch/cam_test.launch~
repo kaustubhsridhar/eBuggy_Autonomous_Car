@@ -1,0 +1,21 @@
+<launch>
+  <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" output="screen" >
+    <param name="video_device" value="/dev/video1" />
+    <param name="image_width" value="640" />
+    <param name="image_height" value="480" />
+    <param name="pixel_format" value="yuyv" />
+    <param name="camera_frame_id" value="usb_cam" />
+    <param name="io_method" value="mmap"/>
+  </node>
+  <node name="image_view" pkg="image_view" type="image_view" respawn="false" output="screen">
+    <remap from="image" to="/usb_cam/image_raw"/>
+    <param name="autosize" value="true" />
+  </node>
+
+  <node name="cam_data_node" pkg="cam_data" type="cam_data_node.py"></node>
+  <node name="reciever_node" pkg="reciever" type="reciever_node"></node>
+  <node name="auto_prog_node4cam" pkg="auto_prog" type="auto_prog_node4cam"></node>
+  <node name="controller_pub_node" pkg="controller" type="controller_pub_node"></node>
+  <node name="controller_sub_node" pkg="controller" type="controller_sub_node"></node>
+
+</launch>
